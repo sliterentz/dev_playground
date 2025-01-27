@@ -1,0 +1,15 @@
+server:
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      cert-manager.io/cluster-issuer: "letsencrypt-${environment}"
+    hosts:
+      - ${argocd_server_domain}
+    tls:
+      - secretName: ${argocd_secret_tls}
+        hosts:
+          - ${argocd_server_domain}
+
+  config:
+    url: ${argocd_config_url}
