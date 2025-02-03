@@ -1,6 +1,6 @@
 output "cluster_name" {
   description = "Name of the created cluster"
-  value       = "rancher-desktop"
+  value       = "mini-cluster"
 }
 
 output "ingress_port" {

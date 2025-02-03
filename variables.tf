@@ -1,6 +1,6 @@
 variable "cluster_name" {
   description = "Name of the k3d cluster"
-  default     = "rancher-desktop"
+  default     = "mini-cluster"
 }
 
 variable "k3d_version" {
@@ -93,22 +93,17 @@ variable "host_port_range" {
 
 variable "grafana_version" {
   description = "Version of Grafana to install"
-  default     = "6.29.3"
+  default     = "8.8.4"
 }
 
 variable "loki_version" {
   description = "Version of Loki to install"
-  default     = "2.9.1"
-}
-
-variable "prometheus_version" {
-  description = "Version of Prometheus to install"
-  default     = "15.10.1"
+  default     = "6.24.1"
 }
 
 variable "kube_prometheus_stack_version" {
-  description = "Version of kube-promoteus-stack controller to install"
-  default     = "60.0.2"
+  description = "Version of kube-prometeus-stack controller to install"
+  default     = "68.3.3"
 }
 
 variable "prometheus_custom_domain" {
@@ -130,7 +125,7 @@ variable "monitoring_namespace" {
 
 variable "promtail_version" {
   description = "Version of Promtail to install"
-  default     = "6.11.2"
+  default     = "6.16.5"
 }
 
 variable "elasticsearch_version" {
@@ -146,4 +141,10 @@ variable "kibana_version" {
 variable "logstash_version" {
   description = "Version of Logstash to install"
   default     = "7.17.3"
+}
+
+variable "github_repo_url" {
+  description = "GitHub repository URL for monorepo"
+  type        = string
+  default     = "git@github.com:sample/demo.git"
 }

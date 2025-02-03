@@ -30,8 +30,77 @@ provider "helm" {
   }
 }
 
+# Provider configuration for minikube
 provider "kubernetes" {
-  config_path = "~/.kube/config"
+  config_path = "~/.kube/config"  # Path to your kubeconfig file
+  config_context = "minikube"
+}
+
+# Create a namespace for our application
+resource "kubernetes_namespace" "dev-playground" {
+  metadata {
+    name = "dev-playground"
+  }
+}
+
+# Create Minikube cluster
+resource "kubernetes_deployment" "dev-playground" {
+  metadata {
+    name = var.cluster_name
+    labels = {
+      test = "simaster"
+    }
+    namespace = "dev-playground"
+  }
+
+    spec {
+    replicas = 2
+
+    selector {
+      match_labels = {
+        test = "simaster"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          test = "simaster"
+        }
+      }
+
+      spec {
+        container {
+          image = "simaster-api:1.0.0"
+          name  = "simaster"
+
+          resources {
+            limits = {
+              cpu    = "0.5"
+              memory = "512Mi"
+            }
+            requests = {
+              cpu    = "250m"
+              memory = "50Mi"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# Create namespaces for blue-green deployment
+resource "kubernetes_namespace" "blue" {
+  metadata {
+    name = "blue"
+  }
+}
+
+resource "kubernetes_namespace" "green" {
+  metadata {
+    name = "green"
+  }
 }
 
 resource "kubernetes_namespace" "argocd" {
@@ -44,6 +113,93 @@ resource "kubernetes_namespace" "argocd" {
       metadata[0].labels,
       metadata[0].annotations,
     ]
+  }
+}
+
+# ArgoCD Application for blue-green deployment
+resource "kubectl_manifest" "simaster_app" {
+  yaml_body = <<YAML
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: simaster-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ${var.github_repo_url}
+    targetRevision: develop
+    path: development
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: blue
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/template/spec/containers/0/image
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/template/spec/containers/0/imagePullPolicy
+YAML
+
+  depends_on = [helm_release.argocd]
+}
+
+# Blue-Green service
+resource "kubernetes_service" "blue_green" {
+  metadata {
+    name = "blue-green-service"
+    namespace = kubernetes_namespace.blue.metadata[0].name
+  }
+  spec {
+    selector = {
+      app = "simaster-app"
+    }
+    port {
+      port        = 9500
+      target_port = 9500
+    }
+  }
+}
+
+# Ingress for Blue-Green service
+resource "kubernetes_ingress_v1" "blue_green" {
+  metadata {
+    name = "blue-green-ingress"
+    namespace = kubernetes_namespace.blue.metadata[0].name
+    annotations = {
+      "kubernetes.io/ingress.class" = "nginx"
+      "cert-manager.io/cluster-issuer" = "letsencrypt-${var.environment}"
+    }
+  }
+  spec {
+    rule {
+      host = "app.${var.argocd_custom_domain}"
+      http {
+        path {
+          path = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = kubernetes_service.blue_green.metadata[0].name
+              port {
+                number = 9500
+              }
+            }
+          }
+        }
+      }
+    }
+    tls {
+      hosts = ["app.${var.argocd_custom_domain}"]
+      secret_name = "blue-green-tls"
+    }
   }
 }
 
@@ -117,6 +273,7 @@ resource "helm_release" "argocd" {
       argocd_config_url = var.argocd_ssl_config_url
       argocd_server_domain = var.argocd_custom_domain
       argocd_secret_tls = var.argocd_secret_tls
+      github_repo_url = var.github_repo_url
     })
   ]
 
@@ -452,9 +609,102 @@ resource "helm_release" "loki" {
   version    = var.loki_version
   namespace  = kubernetes_namespace.monitoring.metadata[0].name
 
+  timeout = 900 # Increase timeout to 15 minutes (900 seconds)
+
+  values = [
+    <<-EOT
+    loki:
+      auth_enabled: false
+      commonConfig:
+        replication_factor: 1
+      storage:
+        type: filesystem
+      schemaConfig:
+        configs:
+          - from: 2020-10-24
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+    
+    singleBinary:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+    
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClassName: standard
+    
+    serviceMonitor:
+      enabled: true
+    
+    monitoring:
+      selfMonitoring:
+        enabled: false
+        grafanaAgent:
+          installOperator: false
+    
+    test:
+      enabled: false
+
+    # Set deployment mode to singleBinary
+    deploymentMode: "SingleBinary<->SimpleScalable"
+
+    # Disable other deployment modes
+    backend:
+      enabled: false
+    read:
+      enabled: false
+    write:
+      enabled: false
+
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      max_cache_freshness_per_query: 10m
+      split_queries_by_interval: 15m
+      allow_structured_metadata: true
+    chunk_store_config:
+      max_look_back_period: 0s
+    table_manager:
+      retention_deletes_enabled: false
+      retention_period: 0s
+    compactor:
+      working_directory: /data/loki/compactor
+      shared_store: filesystem
+
+    gateway:
+      enabled: true
+      ingress:
+        enabled: false
+      service:
+        type: ClusterIP
+    EOT
+  ]
+
   set {
     name  = "persistence.enabled"
-    value = "false"
+    value = "true"
+  }
+
+  set {
+    name  = "persistence.size"
+    value = "5Gi"
+  }
+
+  set {
+    name  = "persistence.storageClassName"
+    value = "standard"
   }
 
   set {
@@ -463,29 +713,16 @@ resource "helm_release" "loki" {
   }
 
   set {
-    name  = "promtail.enabled"
-    value = "true"
+    name  = "loki.commonConfig.replication_factor"
+    value = "1"
   }
 
   set {
-    name  = "podSecurityPolicy.enabled"
-    value = "false"
+    name  = "singleBinary.replicas"
+    value = "1"
   }
 
-  set {
-    name  = "rbac.pspEnabled"
-    value = "false"
-  }
-
-  set {
-    name  = "loki.podSecurityContext.enabled"
-    value = "false"
-  }
-
-  set {
-    name  = "loki.containerSecurityContext.enabled"
-    value = "false"
-  }
+  depends_on = [kubernetes_namespace.monitoring]
 }
 
 resource "helm_release" "promtail" {
@@ -560,38 +797,22 @@ resource "helm_release" "promtail" {
     - effect: NoSchedule
       operator: Exists
 
+    resources:
+      limits:
+        cpu: 200m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
     EOT
   ]
 
   set {
-    name  = "rbac.create"
-    value = "true"
+    name  = "config.lokiAddress"
+    value = "http://loki.${kubernetes_namespace.monitoring.metadata[0].name}.svc.cluster.local:3100/loki/api/v1/push"
   }
 
-  set {
-    name  = "rbac.pspEnabled"
-    value = "false"
-  }
-
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
-
-  set {
-    name  = "serviceAccount.name"
-    value = "promtail"
-  }
-
-  set {
-    name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
-
-  set {
-    name  = "tolerations[0].operator"
-    value = "Exists"
-  }
+  depends_on = [helm_release.loki]
 }
 
 resource "helm_release" "elasticsearch" {
