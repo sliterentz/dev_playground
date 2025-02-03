@@ -91,9 +91,26 @@ variable "host_port_range" {
   default     = "8010-65535"
 }
 
+variable "grafana_admin_password" {
+  description = "Set Grafana default admin password"
+  default     = "prom-operator"
+}
+
 variable "grafana_version" {
   description = "Version of Grafana to install"
   default     = "8.8.4"
+}
+
+variable "grafana_custom_domain" {
+  description = "Custom domain for Grafana"
+  type        = string
+  default     = "grafana.example.com"
+}
+
+variable "grafana_custom_tls" {
+  description = "Custom custom secret for Grafana"
+  type        = string
+  default     = "grafana-tls"
 }
 
 variable "loki_version" {
@@ -126,21 +143,6 @@ variable "monitoring_namespace" {
 variable "promtail_version" {
   description = "Version of Promtail to install"
   default     = "6.16.5"
-}
-
-variable "elasticsearch_version" {
-  description = "Version of Elasticsearch to install"
-  default     = "7.17.3"
-}
-
-variable "kibana_version" {
-  description = "Version of Kibana to install"
-  default     = "7.17.3"
-}
-
-variable "logstash_version" {
-  description = "Version of Logstash to install"
-  default     = "7.17.3"
 }
 
 variable "github_repo_url" {
