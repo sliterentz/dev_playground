@@ -150,11 +150,11 @@ resource "helm_release" "prometheus_operator" {
               - role: endpoints
                 namespaces:
                   names: ['argocd']
-          - job_name: 'dev-app-metrics'
+          - job_name: 'sample-blue-metrics'
             kubernetes_sd_configs:
               - role: endpoints
                 namespaces:
-                  names: ['dev-app']
+                  names: ['sample-blue']
     additionalPrometheusRulesMap:
       rule-name:
         groups:

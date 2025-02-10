@@ -108,12 +108,12 @@ spec:
 }
 
 # ArgoCD Application for blue-green deployment
-resource "kubectl_manifest" "simaster_app" {
+resource "kubectl_manifest" "sample_app" {
   yaml_body = <<YAML
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: simaster-app
+  name: sample-app
   namespace: argocd
 spec:
   project: default
