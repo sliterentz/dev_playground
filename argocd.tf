@@ -103,8 +103,30 @@ spec:
       path: /metrics
   YAML
 
-
   depends_on = [kubernetes_namespace.argocd, kubectl_manifest.cluster_issuer]
+}
+
+resource "kubernetes_secret" "argocd_github_ssh" {
+  metadata {
+    name      = "argocd-github-ssh"
+    namespace = kubernetes_namespace.argocd.metadata[0].name
+    labels = {
+      "argocd.argoproj.io/secret-type" = "repository"
+    }
+  }
+
+  type = "Opaque"
+
+  data = {
+    "name"          = "sample_app"
+    "sshPrivateKey" = var.github_ssh_private_key
+    "url"           = var.github_repo_url
+    "type"          = "git"
+    "insecure"      = "true"
+    "enableLfs"     = "true"
+  }
+
+  depends_on = [helm_release.argocd]
 }
 
 # ArgoCD Application for blue-green deployment
@@ -113,7 +135,7 @@ resource "kubectl_manifest" "sample_app" {
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: sample-app
+  name: sample_app
   namespace: argocd
 spec:
   project: default
@@ -139,5 +161,5 @@ spec:
     - /spec/template/spec/containers/0/imagePullPolicy
 YAML
 
-  depends_on = [helm_release.argocd]
+  depends_on = [helm_release.argocd, kubernetes_secret.argocd_github_ssh]
 }

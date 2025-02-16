@@ -148,5 +148,11 @@ variable "promtail_version" {
 variable "github_repo_url" {
   description = "GitHub repository URL for monorepo"
   type        = string
-  default     = "git@github.com:sample/demo.git"
+  default     = "git@github.com:demo/sample.git"
+}
+
+variable "github_ssh_private_key" {
+  description = "SSH private key for GitHub repository access"
+  type        = string
+  default     = "-----BEGIN OPENSSH PRIVATE KEY-----SamplePrivateKey-----END OPENSSH PRIVATE KEY-----"
 }
